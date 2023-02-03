@@ -15,6 +15,10 @@
   #include "../usermods/Battery/usermod_v2_Battery.h"
 #endif
 
+#ifdef USERMOD_BATTERYFUEL
+  #include "../usermods/BatteryFuel/usermod_v2_BatteryFuel.h"
+#endif
+
 #ifdef USERMOD_DALLASTEMPERATURE
   #include "../usermods/Temperature/usermod_temperature.h"
 #endif
@@ -195,6 +199,10 @@ void registerUsermods()
   //usermods.add(new MyExampleUsermod());
   #ifdef USERMOD_BATTERY
   usermods.add(new UsermodBattery());
+  #endif
+
+  #ifdef USERMOD_BATTERYFUEL
+  usermods.add(new UsermodBatteryFuel());
   #endif
 
   #ifdef USERMOD_DALLASTEMPERATURE
