@@ -180,7 +180,7 @@ class UsermodBatteryFuel : public Usermod
       rawValue = analogRead(batteryPin);
 
       // calculate the voltage     
-      voltage = ((rawValue / getAdcPrecision()) * maxBatteryVoltage) + calibration;
+      voltage = ((rawValue / getAdcPrecision()) * maxBatteryVoltage);
 #endif
       // check if voltage is within specified voltage range, allow 10% over/under voltage
       voltage = ((voltage < minBatteryVoltage * 0.85f) || (voltage > maxBatteryVoltage * 1.1f)) ? -1.0f : voltage;
@@ -213,8 +213,8 @@ class UsermodBatteryFuel : public Usermod
       // }
 
       // Auto off -- Master power off
-      if (autoOffEnabled && (autoOffThreshold >= batteryLevel))
-        turnOff();
+      //if (autoOffEnabled && (autoOffThreshold >= batteryLevel))
+      //  turnOff();
 
 #ifndef WLED_DISABLE_MQTT
       // SmartHome stuff
@@ -354,12 +354,7 @@ class UsermodBatteryFuel : public Usermod
       battery[F("min-voltage")] = minBatteryVoltage;
       battery[F("max-voltage")] = maxBatteryVoltage;
       battery[F("capacity")] = totalBatteryCapacity;
-      battery[F("calibration")] = calibration;
       battery[FPSTR(_readInterval)] = readingInterval;
-      
-      JsonObject ao = battery.createNestedObject(F("auto-off"));               // auto off section
-      ao[FPSTR(_enabled)] = autoOffEnabled;
-      ao[FPSTR(_threshold)] = autoOffThreshold;
 
       JsonObject lp = battery.createNestedObject(F("indicator"));    // low power section
       lp[FPSTR(_enabled)] = lowPowerIndicatorEnabled;
@@ -430,12 +425,7 @@ class UsermodBatteryFuel : public Usermod
       setMinBatteryVoltage(battery[F("min-voltage")] | minBatteryVoltage);
       setMaxBatteryVoltage(battery[F("max-voltage")] | maxBatteryVoltage);
       setTotalBatteryCapacity(battery[F("capacity")] | totalBatteryCapacity);
-      setCalibration(battery[F("calibration")] | calibration);
       setReadingInterval(battery[FPSTR(_readInterval)] | readingInterval);
-
-      JsonObject ao = battery[F("auto-off")];
-      setAutoOffEnabled(ao[FPSTR(_enabled)] | autoOffEnabled);
-      setAutoOffThreshold(ao[FPSTR(_threshold)] | autoOffThreshold);
 
       JsonObject lp = battery[F("indicator")];
       setLowPowerIndicatorEnabled(lp[FPSTR(_enabled)] | lowPowerIndicatorEnabled);
@@ -622,61 +612,6 @@ class UsermodBatteryFuel : public Usermod
     }
 
     /*
-     * Get the configured calibration value
-     * a offset value to fine-tune the calculated voltage.
-     */
-    float getCalibration()
-    {
-      return calibration;
-    }
-
-    /*
-     * Set the voltage calibration offset value
-     * a offset value to fine-tune the calculated voltage.
-     */
-    void setCalibration(float offset)
-    {
-      calibration = offset;
-    }
-
-
-    /*
-     * Get auto-off feature enabled status
-     * is auto-off enabled, true/false
-     */
-    bool getAutoOffEnabled()
-    {
-      return autoOffEnabled;
-    }
-
-    /*
-     * Set auto-off feature status 
-     */
-    void setAutoOffEnabled(bool enabled)
-    {
-      autoOffEnabled = enabled;
-    }
-    
-    /*
-     * Get auto-off threshold in percent (0-100)
-     */
-    int8_t getAutoOffThreshold()
-    {
-      return autoOffThreshold;
-    }
-
-    /*
-     * Set auto-off threshold in percent (0-100) 
-     */
-    void setAutoOffThreshold(int8_t threshold)
-    {
-      autoOffThreshold = min((int8_t)100, max((int8_t)0, threshold));
-      // when low power indicator is enabled the auto-off threshold cannot be above indicator threshold
-      autoOffThreshold  = lowPowerIndicatorEnabled /*&& autoOffEnabled*/ ? min(lowPowerIndicatorThreshold-1, (int)autoOffThreshold) : autoOffThreshold;
-    }
-
-
-    /*
      * Get low-power-indicator feature enabled status
      * is the low-power-indicator enabled, true/false
      */
@@ -726,7 +661,7 @@ class UsermodBatteryFuel : public Usermod
     {
       lowPowerIndicatorThreshold = threshold;
       // when auto-off is enabled the indicator threshold cannot be below auto-off threshold
-      lowPowerIndicatorThreshold  = autoOffEnabled /*&& lowPowerIndicatorEnabled*/ ? max(autoOffThreshold+1, (int)lowPowerIndicatorThreshold) : max(5, (int)lowPowerIndicatorThreshold);
+      //lowPowerIndicatorThreshold  = autoOffEnabled /*&& lowPowerIndicatorEnabled*/ ? max(autoOffThreshold+1, (int)lowPowerIndicatorThreshold) : max(5, (int)lowPowerIndicatorThreshold);
     }
 
     /*
