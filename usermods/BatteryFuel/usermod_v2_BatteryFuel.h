@@ -8,8 +8,8 @@
  * Usermod by Sam Lane, based on the Battery usermod by Maximilian Mewes
  * Designed to work with the MAX17048/9 fuel gauge
  * Mail: contact@samlane.tech
- * GitHub: itCarl
- * Date: 25.12.2022
+ * GitHub: minorDeveloper
+ * Date: 2023.02.03
  * If you have any questions, please feel free to contact me.
  */
 class UsermodBatteryFuel : public Usermod 
