@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Wire.h"
+
 #include "wled.h"
 #include "battery_defaults.h"
 #include "MAX17048.h"
