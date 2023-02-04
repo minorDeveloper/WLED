@@ -4,11 +4,16 @@
 
 #include "wled.h"
 #include "battery_defaults.h"
-#include "MAX17048.h"
+
+#include "./Adafruit/Adafruit_MAX1704X.h"
 
 /*
  * Usermod by Sam Lane, based on the Battery usermod by Maximilian Mewes
- * Designed to work with the MAX17048/9 fuel gauge
+
+ * Designed to work with the MAX17048/9 fuel gauge for precise lipo charge
+ * state sensing and discharge detection
+ * 
+ * 
  * Mail: contact@samlane.tech
  * GitHub: minorDeveloper
  * Date: 2023.02.03
@@ -17,40 +22,45 @@
 class UsermodBatteryFuel : public Usermod 
 {
   private:
-    MAX17048 fuel_gauge;
-    // battery pin can be defined in my_config.h
-    int8_t batteryPin = USERMOD_BATTERYFUEL_MEASUREMENT_PIN;
-    // how often to read the battery voltage
+    Adafruit_MAX17048 fuel_gauge;
+
+    float batteryLowVoltage = USERMOD_BATTERYFUEL_LOW_VOLTAGE;
+    float batteryHighVoltage = USERMOD_BATTERYFUEL_HIGH_VOLTAGE;
+
+    bool batteryLowPowerDim = USERMOD_BATTERYFUEL_LOW_POWER_OFF;
+    float batteryLowPowerPercentage = USERMOD_BATTERYFUEL_LOW_POWER_PERCENTAGE;
+    int8_t lastPreset = 0; // Tracking last preset for low power mode
+
+    struct Alert {
+      bool lowVoltage = false;
+      bool highVoltage = false;
+      bool lowSOC = false;
+      bool lowPowerActive = false;
+    };
+
+    struct Battery {
+      unsigned int capacity = USERMOD_BATTERYFUEL_CAPACITY;
+      float voltage = 0.0f;
+      float percentage = 0.0f;
+      float chargeRate = 0.0f;
+      float chargeTime = 0.0f;
+      bool hibernating = false;
+    };
+
+    Alert alert;
+    Battery battery;
+
+
+    // Frequency with which we read the fuel gauge
     unsigned long readingInterval = USERMOD_BATTERYFUEL_MEASUREMENT_INTERVAL;
     unsigned long nextReadTime = 0;
     unsigned long lastReadTime = 0;
-    // battery min. voltage
-    float minBatteryVoltage = USERMOD_BATTERYFUEL_MIN_VOLTAGE;
-    // battery max. voltage
-    float maxBatteryVoltage = USERMOD_BATTERYFUEL_MAX_VOLTAGE;
-    // all battery cells summed up
-    unsigned int totalBatteryCapacity = USERMOD_BATTERYFUEL_TOTAL_CAPACITY;
-    // raw analog reading 
-    float rawValue = 0.0f;
-    // calculated voltage            
-    float voltage = maxBatteryVoltage;
-    // mapped battery level based on voltage
-    int8_t batteryLevel = 100;
-
-    // low power indicator feature
-    bool lowPowerIndicatorEnabled = USERMOD_BATTERYFUEL_LOW_POWER_INDICATOR_ENABLED;
-    int8_t lowPowerIndicatorPreset = USERMOD_BATTERYFUEL_LOW_POWER_INDICATOR_PRESET;
-    int8_t lowPowerIndicatorThreshold = USERMOD_BATTERYFUEL_LOW_POWER_INDICATOR_THRESHOLD;
-    int8_t lowPowerIndicatorReactivationThreshold = lowPowerIndicatorThreshold+10;
-    int8_t lowPowerIndicatorDuration = USERMOD_BATTERYFUEL_LOW_POWER_INDICATOR_DURATION;
-    bool lowPowerIndicationDone = false;
-    unsigned long lowPowerActivationTime = 0; // used temporary during active time
-    int8_t lastPreset = 0;
 
     bool initDone = false;
     bool initializing = true;
+    bool initSuccess = true;
 
-    // strings to reduce flash memory usage (used more than twice)
+    // Strings to reduce flash memory usage (used more than twice)
     static const char _name[];
     static const char _readInterval[];
     static const char _enabled[];
@@ -58,395 +68,34 @@ class UsermodBatteryFuel : public Usermod
     static const char _preset[];
     static const char _duration[];
     static const char _init[];
+
     
+    // Functions
+    float dot2round(float x);
+    void lowPowerIndicator();
+    void checkFlagAndClear(uint8_t status_flag, int check_flag, bool* _alert);
 
-    // custom map function
-    // https://forum.arduino.cc/t/floating-point-using-map-function/348113/2
-    double mapf(double x, double in_min, double in_max, double out_min, double out_max) 
-    {
-      return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-    }
-
-    float dot2round(float x) 
-    {
-      float nx = (int)(x * 100 + .5);
-      return (float)(nx / 100);
-    }
-
-    /*
-     * Turn off all leds
-     */
-    void turnOff()
-    {
-      bri = 0;
-      stateUpdated(CALL_MODE_DIRECT_CHANGE);
-    }
-
-    /*
-     * Indicate low power by activating a configured preset for a given time and then switching back to the preset that was selected previously
-     */
-    void lowPowerIndicator()
-    {
-      if (!lowPowerIndicatorEnabled) return;
-      if (batteryPin < 0) return;  // no measurement
-      if (lowPowerIndicationDone && lowPowerIndicatorReactivationThreshold <= batteryLevel) lowPowerIndicationDone = false;
-      if (lowPowerIndicatorThreshold <= batteryLevel) return;
-      if (lowPowerIndicationDone) return;
-      if (lowPowerActivationTime <= 1) {
-        lowPowerActivationTime = millis();
-        lastPreset = currentPreset;
-        applyPreset(lowPowerIndicatorPreset);
-      }
-
-      if (lowPowerActivationTime+(lowPowerIndicatorDuration*1000) <= millis()) {
-        lowPowerIndicationDone = true;
-        lowPowerActivationTime = 0;
-        applyPreset(lastPreset);
-      }      
-    }
 
   public:
     // Key functions
+    void setup();
+    void connected();
+    void loop();
+
+    void addToJsonInfo(JsonObject& root);
+    void addToConfig(JsonObject& root);
+    void appendConfigData();
+    bool readFromConfig(JsonObject& root);
+
+    void readFuelGauge();
 
     // Getters and setters
     uint16_t getId();
     unsigned long getReadingInterval();
     void setReadingInterval(unsigned long newReadingInterval);
-    float getMinBatteryVoltage();
-    void setMinBatteryVoltage(float voltage);
-    float getMaxBatteryVoltage();
-    void setMaxBatteryVoltage(float voltage);
-    unsigned int getTotalBatteryCapacity();
-    void setTotalBatteryCapacity(unsigned int capacity);
-    float getAdcPrecision();
-    float getVoltage();
-    int8_t getBatteryLevel();
-    bool getLowPowerIndicatorEnabled();
-    void setLowPowerIndicatorEnabled(bool enabled);
-    int8_t getLowPowerIndicatorPreset();
-    void setLowPowerIndicatorPreset(int8_t presetID);
-    int8_t getLowPowerIndicatorThreshold();
-    void setLowPowerIndicatorThreshold(int8_t threshold);
-    int8_t getLowPowerIndicatorDuration();
-    void setLowPowerIndicatorDuration(int8_t duration);
-    bool getLowPowerIndicatorDone();
 
     // fixme: UNUSED
     void generateExamplePreset();
-
-    /*
-     * setup() is called once at boot. WiFi is not yet connected at this point.
-     * You can use it to initialize variables, sensors or similar.
-     */
-    void setup() 
-    {
-      #ifdef ARDUINO_ARCH_ESP32
-        bool success = false;
-        DEBUG_PRINTLN(F("Allocating battery pin..."));
-        if (batteryPin >= 0 && digitalPinToAnalogChannel(batteryPin) >= 0) 
-          if (pinManager.allocatePin(batteryPin, false, PinOwner::UM_Battery)) {
-            DEBUG_PRINTLN(F("Battery pin allocation succeeded."));
-            success = true;
-          }
-
-        if (!success) {
-          DEBUG_PRINTLN(F("Battery pin allocation failed."));
-          batteryPin = -1;  // allocation failed
-        } else {
-          pinMode(batteryPin, INPUT);
-        }
-      #else //ESP8266 boards have only one analog input pin A0
-
-        pinMode(batteryPin, INPUT);
-      #endif
-
-      nextReadTime = millis() + readingInterval;
-      lastReadTime = millis();
-
-      initDone = true;
-    }
-
-
-    /*
-     * connected() is called every time the WiFi is (re)connected
-     * Use it to initialize network interfaces
-     */
-    void connected() 
-    {
-      //Serial.println("Connected to WiFi!");
-    }
-
-
-    /*
-     * loop() is called continuously. Here you can check for events, read sensors, etc.
-     * 
-     */
-    void loop() 
-    {
-      if(strip.isUpdating()) return;
-
-      lowPowerIndicator();
-
-      // check the battery level every USERMOD_BATTERYFUEL_MEASUREMENT_INTERVAL (ms)
-      if (millis() < nextReadTime) return;
-
-      nextReadTime = millis() + readingInterval;
-      lastReadTime = millis();
-
-      if (batteryPin < 0) return;  // nothing to read
-
-      initializing = false;
-
-#ifdef ARDUINO_ARCH_ESP32
-      // use calibrated millivolts analogread on esp32 (150 mV ~ 2450 mV)
-      rawValue = analogReadMilliVolts(batteryPin);
-      // calculate the voltage
-      voltage = (rawValue / 1000.0f) + calibration;
-      // usually a voltage divider (50%) is used on ESP32, so we need to multiply by 2
-      voltage *= 2.0f;
-#else
-      // read battery raw input
-      rawValue = analogRead(batteryPin);
-
-      // calculate the voltage     
-      voltage = ((rawValue / getAdcPrecision()) * maxBatteryVoltage);
-#endif
-      // check if voltage is within specified voltage range, allow 10% over/under voltage
-      voltage = ((voltage < minBatteryVoltage * 0.85f) || (voltage > maxBatteryVoltage * 1.1f)) ? -1.0f : voltage;
-
-      // translate battery voltage into percentage
-      /*
-        the standard "map" function doesn't work
-        https://www.arduino.cc/reference/en/language/functions/math/map/  notes and warnings at the bottom
-      */
-      #ifdef USERMOD_BATTERYFUEL_USE_LIPO
-        batteryLevel = mapf(voltage, minBatteryVoltage, maxBatteryVoltage, 0, 100); // basic mapping
-        // LiPo batteries have a differnt dischargin curve, see 
-        //  https://blog.ampow.com/lipo-voltage-chart/
-        if (batteryLevel < 40.0f) 
-          batteryLevel = mapf(batteryLevel, 0, 40, 0, 12);       // last 45% -> drops very quickly
-        else {
-          if (batteryLevel < 90.0f)
-            batteryLevel = mapf(batteryLevel, 40, 90, 12, 95);   // 90% ... 40% -> almost linear drop
-          else // level >  90%
-            batteryLevel = mapf(batteryLevel, 90, 105, 95, 100); // highest 15% -> drop slowly
-        }
-      #else
-        batteryLevel = mapf(voltage, minBatteryVoltage, maxBatteryVoltage, 0, 100);
-      #endif
-      if (voltage > -1.0f) batteryLevel = constrain(batteryLevel, 0.0f, 110.0f);
-
-      // if (calculateTimeLeftEnabled) {
-      //   float currentBatteryCapacity = totalBatteryCapacity;
-      //   estimatedTimeLeft = (currentBatteryCapacity/strip.currentMilliamps)*60;
-      // }
-
-      // Auto off -- Master power off
-      //if (autoOffEnabled && (autoOffThreshold >= batteryLevel))
-      //  turnOff();
-
-    }
-
-    /*
-     * addToJsonInfo() can be used to add custom entries to the /json/info part of the JSON API.
-     * Creating an "u" object allows you to add custom key/value pairs to the Info section of the WLED web UI.
-     * Below it is shown how this could be used for e.g. a light sensor
-     */
-    void addToJsonInfo(JsonObject& root)
-    {
-      JsonObject user = root["u"];
-      if (user.isNull()) user = root.createNestedObject("u");
-
-      if (batteryPin < 0) {
-        JsonArray infoVoltage = user.createNestedArray(F("Battery voltage"));
-        infoVoltage.add(F("n/a"));
-        infoVoltage.add(F(" invalid GPIO"));
-        return;  // no GPIO - nothing to report
-      }
-
-      // info modal display names
-      JsonArray infoPercentage = user.createNestedArray(F("Battery level"));
-      JsonArray infoVoltage = user.createNestedArray(F("Battery voltage"));
-      // if (calculateTimeLeftEnabled)
-      // {
-      //   JsonArray infoEstimatedTimeLeft = user.createNestedArray(F("Estimated time left"));
-      //   if (initializing) {
-      //     infoEstimatedTimeLeft.add(FPSTR(_init));
-      //   } else {
-      //     infoEstimatedTimeLeft.add(estimatedTimeLeft);
-      //     infoEstimatedTimeLeft.add(F(" min"));
-      //   }
-      // }
-      JsonArray infoNextUpdate = user.createNestedArray(F("Next update"));
-
-      infoNextUpdate.add((nextReadTime - millis()) / 1000);
-      infoNextUpdate.add(F(" sec"));
-      
-      if (initializing) {
-        infoPercentage.add(FPSTR(_init));
-        infoVoltage.add(FPSTR(_init));
-        return;
-      }
-
-      if (batteryLevel < 0) {
-        infoPercentage.add(F("invalid"));
-      } else {
-        infoPercentage.add(batteryLevel);
-      }
-      infoPercentage.add(F(" %"));
-
-      if (voltage < 0) {
-        infoVoltage.add(F("invalid"));
-      } else {
-        infoVoltage.add(dot2round(voltage));
-      }
-      infoVoltage.add(F(" V"));
-    }
-
-    /*
-     * addToConfig() can be used to add custom persistent settings to the cfg.json file in the "um" (usermod) object.
-     * It will be called by WLED when settings are actually saved (for example, LED settings are saved)
-     * If you want to force saving the current state, use serializeConfig() in your loop().
-     * 
-     * CAUTION: serializeConfig() will initiate a filesystem write operation.
-     * It might cause the LEDs to stutter and will cause flash wear if called too often.
-     * Use it sparingly and always in the loop, never in network callbacks!
-     * 
-     * addToConfig() will make your settings editable through the Usermod Settings page automatically.
-     *
-     * Usermod Settings Overview:
-     * - Numeric values are treated as floats in the browser.
-     *   - If the numeric value entered into the browser contains a decimal point, it will be parsed as a C float
-     *     before being returned to the Usermod.  The float data type has only 6-7 decimal digits of precision, and
-     *     doubles are not supported, numbers will be rounded to the nearest float value when being parsed.
-     *     The range accepted by the input field is +/- 1.175494351e-38 to +/- 3.402823466e+38.
-     *   - If the numeric value entered into the browser doesn't contain a decimal point, it will be parsed as a
-     *     C int32_t (range: -2147483648 to 2147483647) before being returned to the usermod.
-     *     Overflows or underflows are truncated to the max/min value for an int32_t, and again truncated to the type
-     *     used in the Usermod when reading the value from ArduinoJson.
-     * - Pin values can be treated differently from an integer value by using the key name "pin"
-     *   - "pin" can contain a single or array of integer values
-     *   - On the Usermod Settings page there is simple checking for pin conflicts and warnings for special pins
-     *     - Red color indicates a conflict.  Yellow color indicates a pin with a warning (e.g. an input-only pin)
-     *   - Tip: use int8_t to store the pin value in the Usermod, so a -1 value (pin not set) can be used
-     *
-     * See usermod_v2_auto_save.h for an example that saves Flash space by reusing ArduinoJson key name strings
-     * 
-     * If you need a dedicated settings page with custom layout for your Usermod, that takes a lot more work.  
-     * You will have to add the setting to the HTML, xml.cpp and set.cpp manually.
-     * See the WLED Soundreactive fork (code and wiki) for reference.  https://github.com/atuline/WLED
-     * 
-     * I highly recommend checking out the basics of ArduinoJson serialization and deserialization in order to use custom settings!
-     */
-    void addToConfig(JsonObject& root)
-    {
-      JsonObject battery = root.createNestedObject(FPSTR(_name));           // usermodname
-      #ifdef ARDUINO_ARCH_ESP32
-        battery[F("pin")] = batteryPin;
-      #endif
-
-      // battery[F("time-left")] = calculateTimeLeftEnabled;
-      battery[F("min-voltage")] = minBatteryVoltage;
-      battery[F("max-voltage")] = maxBatteryVoltage;
-      battery[F("capacity")] = totalBatteryCapacity;
-      battery[FPSTR(_readInterval)] = readingInterval;
-
-      JsonObject lp = battery.createNestedObject(F("indicator"));    // low power section
-      lp[FPSTR(_enabled)] = lowPowerIndicatorEnabled;
-      lp[FPSTR(_preset)] = lowPowerIndicatorPreset; // dropdown trickery (String)lowPowerIndicatorPreset; 
-      lp[FPSTR(_threshold)] = lowPowerIndicatorThreshold;
-      lp[FPSTR(_duration)] = lowPowerIndicatorDuration;
-
-      DEBUG_PRINTLN(F("Battery config saved."));
-    }
-
-    void appendConfigData()
-    {
-      oappend(SET_F("addInfo('Battery:min-voltage', 1, 'v');"));
-      oappend(SET_F("addInfo('Battery:max-voltage', 1, 'v');"));
-      oappend(SET_F("addInfo('Battery:capacity', 1, 'mAh');"));
-      oappend(SET_F("addInfo('Battery:interval', 1, 'ms');"));
-      oappend(SET_F("addInfo('Battery:auto-off:threshold', 1, '%');"));
-      oappend(SET_F("addInfo('Battery:indicator:threshold', 1, '%');"));
-      oappend(SET_F("addInfo('Battery:indicator:duration', 1, 's');"));
-    }
-
-
-    /*
-     * readFromConfig() can be used to read back the custom settings you added with addToConfig().
-     * This is called by WLED when settings are loaded (currently this only happens immediately after boot, or after saving on the Usermod Settings page)
-     * 
-     * readFromConfig() is called BEFORE setup(). This means you can use your persistent values in setup() (e.g. pin assignments, buffer sizes),
-     * but also that if you want to write persistent values to a dynamic buffer, you'd need to allocate it here instead of in setup.
-     * If you don't know what that is, don't fret. It most likely doesn't affect your use case :)
-     * 
-     * Return true in case the config values returned from Usermod Settings were complete, or false if you'd like WLED to save your defaults to disk (so any missing values are editable in Usermod Settings)
-     * 
-     * getJsonValue() returns false if the value is missing, or copies the value into the variable provided and returns true if the value is present
-     * The configComplete variable is true only if the "exampleUsermod" object and all values are present.  If any values are missing, WLED will know to call addToConfig() to save them
-     * 
-     * This function is guaranteed to be called on boot, but could also be called every time settings are updated
-     */
-    bool readFromConfig(JsonObject& root)
-    {
-      #ifdef ARDUINO_ARCH_ESP32
-        int8_t newBatteryPin = batteryPin;
-      #endif
-      
-      JsonObject battery = root[FPSTR(_name)];
-      if (battery.isNull()) 
-      {
-        DEBUG_PRINT(FPSTR(_name));
-        DEBUG_PRINTLN(F(": No config found. (Using defaults.)"));
-        return false;
-      }
-
-      #ifdef ARDUINO_ARCH_ESP32
-        newBatteryPin     = battery[F("pin")] | newBatteryPin;
-      #endif
-      // calculateTimeLeftEnabled = battery[F("time-left")] | calculateTimeLeftEnabled;
-      setMinBatteryVoltage(battery[F("min-voltage")] | minBatteryVoltage);
-      setMaxBatteryVoltage(battery[F("max-voltage")] | maxBatteryVoltage);
-      setTotalBatteryCapacity(battery[F("capacity")] | totalBatteryCapacity);
-      setReadingInterval(battery[FPSTR(_readInterval)] | readingInterval);
-
-      JsonObject lp = battery[F("indicator")];
-      setLowPowerIndicatorEnabled(lp[FPSTR(_enabled)] | lowPowerIndicatorEnabled);
-      setLowPowerIndicatorPreset(lp[FPSTR(_preset)] | lowPowerIndicatorPreset); // dropdown trickery (int)lp["preset"]
-      setLowPowerIndicatorThreshold(lp[FPSTR(_threshold)] | lowPowerIndicatorThreshold);
-      lowPowerIndicatorReactivationThreshold = lowPowerIndicatorThreshold+10;
-      setLowPowerIndicatorDuration(lp[FPSTR(_duration)] | lowPowerIndicatorDuration);
-
-      DEBUG_PRINT(FPSTR(_name));
-
-      #ifdef ARDUINO_ARCH_ESP32
-        if (!initDone) 
-        {
-          // first run: reading from cfg.json
-          batteryPin = newBatteryPin;
-          DEBUG_PRINTLN(F(" config loaded."));
-        } 
-        else 
-        {
-          DEBUG_PRINTLN(F(" config (re)loaded."));
-
-          // changing parameters from settings page
-          if (newBatteryPin != batteryPin) 
-          {
-            // deallocate pin
-            pinManager.deallocatePin(batteryPin, PinOwner::UM_Battery);
-            batteryPin = newBatteryPin;
-            // initialise
-            setup();
-          }
-        }
-      #endif
-
-      return !battery[FPSTR(_readInterval)].isNull();
-    }
-
-
-   
 };
 
 
