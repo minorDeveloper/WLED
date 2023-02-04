@@ -5,7 +5,7 @@
 #include "wled.h"
 #include "battery_defaults.h"
 
-#include "./Adafruit/Adafruit_MAX1704X.h"
+//#include "./Adafruit/Adafruit_MAX1704X.h"
 
 /*
  * Usermod by Sam Lane, based on the Battery usermod by Maximilian Mewes
@@ -22,7 +22,7 @@
 class UsermodBatteryFuel : public Usermod 
 {
   private:
-    Adafruit_MAX17048 fuel_gauge;
+    //Adafruit_MAX17048 fuel_gauge;
 
     float batteryLowVoltage = USERMOD_BATTERYFUEL_LOW_VOLTAGE;
     float batteryHighVoltage = USERMOD_BATTERYFUEL_HIGH_VOLTAGE;
@@ -96,6 +96,11 @@ class UsermodBatteryFuel : public Usermod
 
     // fixme: UNUSED
     void generateExamplePreset();
+
+    virtual ~UsermodBatteryFuel() 
+    {
+
+    }
 };
 
 

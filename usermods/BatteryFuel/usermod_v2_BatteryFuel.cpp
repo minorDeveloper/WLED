@@ -17,11 +17,12 @@ void UsermodBatteryFuel::setup()
     Wire.begin(i2c_sda, i2c_scl);
     DEBUG_PRINTLN(F("I2C initialised"));
 
-    if (!fuel_gauge.begin(&Wire)) {
-        initSuccess = false;
-    }
+    // HERE
+    //if (!fuel_gauge.begin(&Wire)) {
+    //    initSuccess = false;
+    //}
 
-    fuel_gauge.setAlertVoltages(batteryLowVoltage, batteryHighVoltage);
+    //fuel_gauge.setAlertVoltages(batteryLowVoltage, batteryHighVoltage);
 
     nextReadTime = millis() + readingInterval;
     lastReadTime = millis();
@@ -63,11 +64,13 @@ void UsermodBatteryFuel::lowPowerIndicator()
 
 void UsermodBatteryFuel::checkFlagAndClear(uint8_t status_flag, int check_flag, bool* _alert) {
     *_alert = status_flag & check_flag;
-    if (*_alert) fuel_gauge.clearAlertFlag(check_flag);
+    //HERE
+    //if (*_alert) fuel_gauge.clearAlertFlag(check_flag);
 }
 
 
 void UsermodBatteryFuel::readFuelGauge() {
+    /*HERE
     battery.voltage = fuel_gauge.cellVoltage();
     battery.percentage = fuel_gauge.cellPercent();
     battery.chargeRate = fuel_gauge.chargeRate();
@@ -83,6 +86,7 @@ void UsermodBatteryFuel::readFuelGauge() {
     if (battery.capacity == 0 || battery.chargeRate == 0.0f) return;
 
     battery.chargeTime = 1.0f / battery.chargeRate;
+    */
 }
 
 /*
