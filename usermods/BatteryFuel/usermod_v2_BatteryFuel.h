@@ -136,7 +136,7 @@ class UsermodBatteryFuel : public Usermod
 
       if (!initSuccess) return;  // no GPIO - nothing to report
 
-
+      
       JsonArray infoPercentage = user.createNestedArray(F("Battery level"));
       JsonArray infoVoltage = user.createNestedArray(F("Battery voltage"));
       JsonArray infoChargeRate = user.createNestedArray(F("Charge rate"));
