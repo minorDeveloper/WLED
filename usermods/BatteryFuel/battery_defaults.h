@@ -24,6 +24,10 @@
   #define USERMOD_BATTERYFUEL_MEASUREMENT_INTERVAL 20000
 #endif
 
+#ifndef USERMOD_BATTERYFUEL_LOW_POWER_PRESET_ID
+  #define USERMOD_BATTERYFUEL_LOW_POWER_PRESET_ID 0
+#endif
+
 //***********************REWRITTEN ABOVE HERE*********************************
  
 

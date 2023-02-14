@@ -29,7 +29,8 @@ class UsermodBatteryFuel : public Usermod
 
     bool batteryLowPowerDim = USERMOD_BATTERYFUEL_LOW_POWER_OFF;
     float batteryLowPowerPercentage = USERMOD_BATTERYFUEL_LOW_POWER_PERCENTAGE;
-    int8_t lastPreset = 0; // Tracking last preset for low power mode
+    uint8_t batteryLowPresetID = USERMOD_BATTERYFUEL_LOW_POWER_PRESET_ID;
+    uint8_t lastPreset = 0; // Tracking last preset for low power mode
 
     struct Alert {
       bool lowVoltage = false;
@@ -85,12 +86,12 @@ class UsermodBatteryFuel : public Usermod
       if(alert.lowVoltage || alert.lowSOC) {
       if (!alert.lowPowerActive) {
         lastPreset = currentPreset;
-        //applyPreset(lowPowerIndicatorPreset);
+        applyPreset(batteryLowPresetID);
         alert.lowPowerActive = true;
       }
       } else {
         if(alert.lowPowerActive) {
-          //applyPreset(lastPreset);
+          applyPreset(batteryLowPresetID);
           alert.lowPowerActive = false;
         }
       }
@@ -155,7 +156,7 @@ class UsermodBatteryFuel : public Usermod
       infoChargeTime.add(battery.chargeTime);
       infoChargeTime.add(" hrs");
 
-      infoNextUpdate.add(nextReadTime / 1000);
+      infoNextUpdate.add((nextReadTime - millis()) / 1000);
       infoChargeTime.add(" s");
     }
 
@@ -167,6 +168,7 @@ class UsermodBatteryFuel : public Usermod
       user[F("high-voltage")] = batteryHighVoltage;
       user[F("dim-percentage")] = batteryLowPowerDim;
       user[F("low-power-percentage")] = batteryLowPowerPercentage;
+      user[F("low-power-preset-id")] = batteryLowPresetID;
       user[F("reading-interval")] = readingInterval;
 
       DEBUG_PRINTLN(F("Battery fuel config saved."));
@@ -178,6 +180,7 @@ class UsermodBatteryFuel : public Usermod
       oappend(SET_F("addInfo('BatteryFuel:high-voltage', 1, 'v');"));
       oappend(SET_F("addInfo('BatteryFuel:dim-percentage', 1, '%');"));
       oappend(SET_F("addInfo('BatteryFuel:low-power-percentage', 1, '%');"));
+      oappend(SET_F("addInfo('BatteryFuel:low-power-preset-id', 1);"));
       oappend(SET_F("addInfo('BatteryFuel:reading-interval', 1, 'ms');"));
     }
     
@@ -209,6 +212,7 @@ class UsermodBatteryFuel : public Usermod
       batteryHighVoltage = user[F("high-voltage")] | batteryHighVoltage;
       batteryLowPowerDim = user[F("dim-percentage")] | batteryLowPowerDim;
       batteryLowPowerPercentage = user[F("low-power-percentage")] | batteryLowPowerPercentage;
+      batteryLowPresetID = user[F("low-power-preset-id")] | batteryLowPresetID;
       readingInterval = user[F("reading-interval")] | readingInterval;
       DEBUG_PRINT("Config loaded");
 
