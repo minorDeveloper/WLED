@@ -156,7 +156,7 @@ class UsermodBatteryFuel : public Usermod
       infoChargeTime.add(battery.chargeTime);
       infoChargeTime.add(" hrs");
 
-      infoNextUpdate.add((nextReadTime - millis()) / 1000);
+      infoNextUpdate.add((nextReadTime - millis()));
       infoChargeTime.add(" s");
     }
 
