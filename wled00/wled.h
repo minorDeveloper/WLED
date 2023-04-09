@@ -8,7 +8,7 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 2302150
+#define VERSION 2303240
 
 //uncomment this if you have a "my_config.h" file you'd like to use
 //#define WLED_USE_MY_CONFIG
@@ -30,7 +30,11 @@
 #ifndef WLED_DISABLE_MQTT
   #define WLED_ENABLE_MQTT         // saves 12kb
 #endif
-#define WLED_ENABLE_ADALIGHT       // saves 500b only (uses GPIO3 (RX) for serial)
+#ifndef WLED_DISABLE_ADALIGHT      // can be used to disable reading commands from serial RX pin (see issue #3128). 
+  #define WLED_ENABLE_ADALIGHT     // disable saves 5Kb (uses GPIO3 (RX) for serial). Related serial protocols: Adalight/TPM2, Improv, Serial JSON, Continuous Serial Streaming 
+#else
+  #undef WLED_ENABLE_ADALIGHT      // disable has priority over enable
+#endif
 //#define WLED_ENABLE_DMX          // uses 3.5kb (use LEDPIN other than 2)
 //#define WLED_ENABLE_JSONLIVE     // peek LED output via /json/live (WS binary peek is always enabled)
 #ifndef WLED_DISABLE_LOXONE
@@ -488,12 +492,13 @@ WLED_GLOBAL bool wasConnected _INIT(false);
 WLED_GLOBAL byte lastRandomIndex _INIT(0);        // used to save last random color so the new one is not the same
 
 // transitions
-WLED_GLOBAL bool          transitionActive       _INIT(false);
-WLED_GLOBAL uint16_t      transitionDelayDefault _INIT(transitionDelay); // default transition time (storec in cfg.json)
-WLED_GLOBAL uint16_t      transitionDelayTemp    _INIT(transitionDelay); // actual transition duration (overrides transitionDelay in certain cases)
+WLED_GLOBAL bool          transitionActive        _INIT(false);
+WLED_GLOBAL uint16_t      transitionDelayDefault  _INIT(transitionDelay); // default transition time (storec in cfg.json)
+WLED_GLOBAL uint16_t      transitionDelayTemp     _INIT(transitionDelay); // actual transition duration (overrides transitionDelay in certain cases)
 WLED_GLOBAL unsigned long transitionStartTime;
-WLED_GLOBAL float         tperLast               _INIT(0.0f);            // crossfade transition progress, 0.0f - 1.0f
-WLED_GLOBAL bool          jsonTransitionOnce     _INIT(false);           // flag to override transitionDelay (playlist, JSON API: "live" & "seg":{"i"} & "tt")
+WLED_GLOBAL float         tperLast                _INIT(0.0f);            // crossfade transition progress, 0.0f - 1.0f
+WLED_GLOBAL bool          jsonTransitionOnce      _INIT(false);           // flag to override transitionDelay (playlist, JSON API: "live" & "seg":{"i"} & "tt")
+WLED_GLOBAL uint8_t       randomPaletteChangeTime _INIT(5);               // amount of time [s] between random palette changes (min: 1s, max: 255s)
 
 // nightlight
 WLED_GLOBAL bool nightlightActive _INIT(false);

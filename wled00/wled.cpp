@@ -267,6 +267,9 @@ void WLED::setup()
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detection
   #endif
 
+  #ifdef ARDUINO_ARCH_ESP32
+  pinMode(hardwareRX, INPUT_PULLDOWN); delay(1);        // suppress noise in case RX pin is floating (at low noise energy) - see issue #3128
+  #endif
   Serial.begin(115200);
   #if !ARDUINO_USB_CDC_ON_BOOT
   Serial.setTimeout(50);  // this causes troubles on new MCUs that have a "virtual" USB Serial (HWCDC)
@@ -316,8 +319,7 @@ void WLED::setup()
   DEBUG_PRINT(F("esp8266 "));
   DEBUG_PRINTLN(ESP.getCoreVersion());
 #endif
-  DEBUG_PRINT(F("heap "));
-  DEBUG_PRINTLN(ESP.getFreeHeap());
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
 
   #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_PSRAM)
   if (psramFound()) {
@@ -351,6 +353,8 @@ void WLED::setup()
 
   DEBUG_PRINTLN(F("Registering usermods ..."));
   registerUsermods();
+
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
 
   for (uint8_t i=1; i<WLED_MAX_BUTTONS; i++) btnPin[i] = -1;
 
@@ -392,10 +396,12 @@ void WLED::setup()
 
   DEBUG_PRINTLN(F("Initializing strip"));
   beginStrip();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
 
   DEBUG_PRINTLN(F("Usermods setup"));
   userSetup();
   usermods.setup();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
 
   if (strcmp(clientSSID, DEFAULT_CLIENT_SSID) == 0)
     showWelcomePage = true;
@@ -451,7 +457,9 @@ void WLED::setup()
 #endif
 
   // HTTP server page init
+  DEBUG_PRINTLN(F("initServer"));
   initServer();
+  DEBUG_PRINT(F("heap ")); DEBUG_PRINTLN(ESP.getFreeHeap());
 
   enableWatchdog();
 
@@ -747,6 +755,8 @@ void WLED::handleConnection()
       DEBUG_PRINTLN(heap);
       forceReconnect = true;
       strip.purgeSegments(true); // remove all but one segments from memory
+    } else if (heap < MIN_HEAP_SIZE) {
+      strip.purgeSegments();
     }
     lastHeap = heap;
     heapTime = now;
