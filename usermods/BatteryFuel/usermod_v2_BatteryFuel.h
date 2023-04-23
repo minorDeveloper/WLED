@@ -16,7 +16,7 @@
  * 
  * Mail: contact@samlane.tech
  * GitHub: minorDeveloper
- * Date: 2023.02.03
+ * Date: 2023.04.02
  * If you have any questions, please feel free to contact me.
  */
 class UsermodBatteryFuel : public Usermod 
